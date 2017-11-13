@@ -15,23 +15,31 @@ addpath('Global_Files')
 %% Check for & Create Save directories
 % ======================================================================= %
 
-save_results = false;
-load_results = false;
+save_results = true;
+load_results = true;
 
 % if save_data folder does not exist, make it
+% if save_results
+%     if ~exist('save_data','dir')
+%         mkdir('save_data');
+%     end
+%     if ~exist('save_data/models','dir')
+%         mkdir('save_data/models');
+%     end
+%     if ~exist('save_data/solutions','dir')
+%         mkdir('save_data/solutions');
+%     end
+%     if ~exist('save_data/BMS_solutions','dir')
+%         mkdir('save_data/BMS_solutions');
+%     end
+% end
+
 if save_results
-    if ~exist('save_data','dir')
-        mkdir('save_data');
-    end
-    if ~exist('save_data/models','dir')
-        mkdir('save_data/models');
-    end
-    if ~exist('save_data/solutions','dir')
-        mkdir('save_data/solutions');
-    end
-    if ~exist('save_data/BMS_solutions','dir')
-        mkdir('save_data/BMS_solutions');
-    end
+    mkdir('save_data');
+    mkdir('save_data/models');
+    mkdir('save_data/solutions');
+    mkdir('save_data/BMS_solutions');
+    mkdir('figures');    
 end
 
 %% Solution Options
@@ -128,9 +136,9 @@ theta_offset = 0*pi/180;
 % mrl = 24; n=2; % (23040 DOF)
 % mrl = 25; n=2; % (25000 DOF)
 
-mrl = 4; n=3; % (2560 DOF)
+% mrl = 4; n=3; % (2560 DOF)
 % mrl = 8; n=3; % (10240 DOF)
-% mrl = 12; n=3; % (23040 DOF)
+mrl = 12; n=3; % (23040 DOF)
 % mrl = 16; n=3; % (40960 DOF)
 
 % mrl = 4; n=4; % (5760 DOF)
@@ -443,11 +451,14 @@ if full_soln
         load([solution_savestring,'.mat'])
     else
         
-        % Full FE model w(k) Dispersion Solution
+        % Full FE model k(w) Dispersion Solution
         tic
-        options.full_eig = true; % this will use a direct solution with dynamic reduction (works better)
+        
+        clear options_k_w
+        options_k_w.n_curves = n_curves;
+        
         [kappa_full,phi,t_wloop_full] = ...
-            dispersion_solver_k_w(omega,K_free,[],M_free,dof_sets,R,options);
+            dispersion_solver_k_w(omega,K_free,[],M_free,dof_sets,R,options_k_w);
         t_full_k = toc;
         if save_results
             save(solution_savestring,'kappa_full','t_wloop_full')
@@ -461,7 +472,13 @@ end
 
 % profile clear
 % n_curves = [];
-[kappa_BMS,~,t_wloop_BMS] = dispersion_solver_k_w(omega,K_BMS,[],M_BMS,dof_sets_BMS,R,[]);
+
+
+clear options_k_w
+options_k_w.n_curves = n_curves;
+
+[kappa_BMS,~,t_wloop_BMS] = dispersion_solver_k_w(omega,K_BMS,[],M_BMS,...
+    dof_sets_BMS,R,options_k_w);
 
 sum(t_wloop_BMS)
 
@@ -470,8 +487,11 @@ sum(t_wloop_BMS)
 % ======================================================================= %
 
 n_om = 200;
+clear options_k_w
+options_k_w.n_curves = n_curves;
 omega_plus = linspace(0,w_cut_max,n_om);
-[kappa_BMS_plus,PHI_BMS_plus,t_wloop_BMS_plus] = dispersion_solver_k_w(omega_plus,K_BMSpl,[],M_BMSpl,dof_sets_BMSpl,R,[]);
+
+[kappa_BMS_plus,PHI_BMS_plus,t_wloop_BMS_plus] = dispersion_solver_k_w(omega_plus,K_BMSpl,[],M_BMSpl,dof_sets_BMSpl,R,options_k_w);
 
 % timing results
 t_BMS_plus_k_w = sum(t_wloop_BMS_plus) + info_BMS_plus.t_up_front
@@ -481,27 +501,33 @@ t_full_k_w/t_BMS_plus_k_w
 %% plot BMS k(w) solution
 % ======================================================================= %
 curve_plot = 1:8;
+
+options_plot.Markers = {'o','v'};
+options_plot.ThreeD = true;
+options_plot.LineStyles = {'none','none'};
+options_plot.Colors = {'k','g'};
+om_plot = 1:length(omega);
+omega_plot = omega(om_plot)*norm_fac;
+kappas_plot = {kappa_full(curve_plot,om_plot),...
+               kappa_BMS_plus(curve_plot,om_plot)};
+figure(4);clf
+[h,legendvec] = dispersion_plot_k_w(omega_plot,kappas_plot,options_plot);
+
+
+% add in w(k) dispersion
+hold on
+k_plot = 1:((n_kap-1)/3+1);
+% k_plot = 1:n_kap;
+subplot(1,3,2)
+h2 = plot(kappa_plot(k_plot),f_full(:,k_plot)*2*pi*norm_fac,'k-')
+
+legend([legendvec,h2(1)],'BMS_{HCB+}','full','full_k(w)')
+
 figure(5);clf;hold on;view(3)
 h1 = plot3(real(kappa_BMS(curve_plot,:)),imag(kappa_BMS(curve_plot,:)),omega/(2*pi),'g.');hold on
 h2 = plot3(real(kappa_BMS_plus(curve_plot,:)),imag(kappa_BMS_plus(curve_plot,:)),omega_plus/(2*pi),'bx');hold on
 h3 = plot3(real(kappa_full(curve_plot,:)),imag(kappa_full(curve_plot,:)),omega/(2*pi),'ko');hold on
 legend([h1(1),h2(1),h3(1)],'BMS','BMS+','Full')
-
-options_plot.MarkerOrder = {'.','o','v'};
-options_plot.ThreeD = true;
-om_plot = 1:length(omega);
-omega_plot = omega(om_plot)*norm_fac;
-kappas_plot = {kappa_BMS(curve_plot,om_plot),...
-               kappa_BMS_plus(curve_plot,om_plot),...
-               kappa_full(curve_plot,om_plot)};
-figure(4);clf
-h = dispersion_plot_k_w(omega_plot,kappas_plot,options_plot);
-
-% add in k(w) dispersion
-hold on
-k_plot = 1:((n_kap-1)/3+1);
-plot(kappa_plot(k_plot),f_full(:,k_plot)*2*pi*norm_fac,'k-')
-
 
 %%
 kappa_temp = kappa_BMS_plus(curve_plot,:);

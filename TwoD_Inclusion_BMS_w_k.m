@@ -14,26 +14,17 @@ addpath(genpath('libraries'))
 %% Check for & Create Save directories
 % ======================================================================= %
 
-save_results = false;
-load_results = false;
+save_results = true;
+load_results = true;
 
-% if save_data folder does not exist, make it
+% should check if these exist before making them, but Matlab's "exist"
+% function appears to be buggy.
 if save_results
-    if ~exist('save_data','dir')
-        mkdir('save_data');
-    end
-    if ~exist('save_data/models','dir')
-        mkdir('save_data/models');
-    end
-    if ~exist('save_data/solutions','dir')
-        mkdir('save_data/solutions');
-    end
-    if ~exist('save_data/BMS_solutions','dir')
-        mkdir('save_data/BMS_solutions');
-    end
-    if ~exist('figures','dir')
-        mkdir('figures');
-    end
+    mkdir save_data
+    mkdir save_data/models
+    mkdir save_data/solutions
+    mkdir save_data/BMS_solutions
+    mkdir figures
 end
 
 %% Solution Options
@@ -59,8 +50,6 @@ BMS_soln = true;
 BMS_LIR_soln = true;
 
 % save results?
-% save_results = true;
-% load_results = false;
 date_string = datestr(now,'dd-mmm-yyyy HH-MM');
 
 %% Circular Inclusion model dimensions
@@ -207,6 +196,29 @@ n_kap = size(kappa,2);
 [xlocs,ylocs,elenodes,pattern,patchfaces,C,fedges] = ...
      mesh_circular_inclusion(n,n_ele_ss,n_ele_c,n_ele_layer,...
          n_ele_bs,r_ss,r_bs,r_c,r_l,cir_dist,n_petals,theta_offset);
+     
+if false
+    [xlocs2,ylocs2,~,~,~,~,~] = ...
+         mesh_circular_resonator(n,n_ele_ss,n_ele_c,n_ele_layer,...
+             n_ele_bs,r_ss,r_bs,r_c,r_l,cir_dist,n_petals,theta_offset);
+
+    n_nodes = length(xlocs);
+    resort = zeros(n_nodes,1);
+    for i = 1:n_nodes
+        eval = abs(xlocs2-xlocs(i)) + abs(ylocs2-ylocs(i));
+        [~,resort(i)] = min(eval);
+    end
+
+
+    xy = [xlocs,ylocs];
+    xy2 = [xlocs2,ylocs2];
+    % xy = sortrows(xy);
+    % xy2 = sortrows(xy2);
+
+    sum(abs(xy-xy2(resort,:)))/n_nodes
+
+    % pause
+end
      
 %% Find node sets for boundaries
 % ======================================================================= %
@@ -369,29 +381,20 @@ t_BMS = sum(t_kloop_BMS) + info_BMS.t_up_front
 
 
 % interior reduction parameters
-clear options_BMSpl
-options_BMSpl.InteriorMethod       = 'CB+';
+% options_BMSpl.InteriorMethod       = 'CB+';
+% options_BMSpl.BoundaryMethod        = 'exact';
+
+% parameters used in JCOMP paper
+% (many of these are the default values, but they are included here as a
+% reminder of what parameters were used)
+options_BMS_pl.InteriorMethod       = 'CB+';
 options_BMSpl.BoundaryMethod        = 'exact';
 options_BMSpl.n_FI                  = 30;
 options_BMSpl.n_CC                  = 12;
-
-% AMLS+ interior reduction parameters
-% % % %
-% clear options_BMSpl
-% options_BMSpl.InteriorMethod        = 'AMLS+';
-% options_BMSpl.BoundaryMethod        = 'none';
-% % options_BMSpl.n_FI                  = 30;
-% % options_BMSpl.n_CC                  = 12;
-% options_BMSpl.w_i                   = max(w_BMS(:));
-
-
-
-% options_BMSpl.BoundaryMethod        = 'hybrid';
-% options_BMSpl.n_CC                  = 25;
-
-
-% options_BMSpl.BoundaryMethod        = 'exact';
-% options_BMSpl.n_CC                  = 14;
+options_BMSpl.verbose               = true;
+options_BMSpl.plots                 = true;
+options_BMSpl.orthoTypeLIRExact     = 'svd';
+options_BMSpl.verbose               = true;
 
 % perform BMS reduction 
 % [K_BMSpl,M_BMSpl,dof_sets_BMS,t_up_front_plus,T_BMS] = BMS_plus(K_free,M_free,coordinates,w_cut*0.5,R,n_FI,n_LI);
@@ -707,8 +710,8 @@ if eval_BMS
     end
 end
 
-n_dof_BMS_save(:,1)./n_dof_BMS_save(:,2)
-pause
+% n_dof_BMS_save(:,1)./n_dof_BMS_save(:,2)
+% pause
 %% plot mode
 % ======================================================================= %
 
